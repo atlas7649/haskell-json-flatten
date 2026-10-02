@@ -7,6 +7,7 @@ import qualified Data.Text as T
 import qualified Data.Vector as V
 import Data.List (foldl')
 import Data.Maybe (fromMaybe)
+import Text.Read (readMaybe)
 
 flattenJSON :: Value -> HM.HashMap T.Text Value
 flattenJSON = go ""
@@ -38,4 +39,19 @@ unflattenJSON flattened = foldl' insertPath (Object HM.empty) (HM.toList flatten
         go _ (p:ps) = Object (HM.singleton p (go (Object HM.empty) ps))
 
     parsePath :: T.Text -> [T.Text]
-    parsePath t = T.splitOn "." t
+    parsePath t = filter (not . T.null) $ foldr splitArray [t] [T.pack "["]
+      where
+        splitArray sep acc = concatMap (splitParts sep) acc
+        splitParts sep part = 
+          case T.breakOn sep part of
+            (prefix, suffix) | T.null suffix -> [prefix]
+            (prefix, suffix) -> 
+              let rest = T.drop (T.length sep) suffix
+                  (idx, remainder) = T.breakOn "]" rest
+                  fullIdx = idx <> "]"
+              in if T.null prefix then [fullIdx] <> splitParts sep remainder
+                 else prefix : fullIdx : splitParts sep remainder
+
+    -- Note: True array reconstruction requires tracking indices and sorting, 
+    -- this implementation currently reconstructs as objects with index keys
+    -- to maintain stability within the existing HM.HashMap structure.

@@ -17,7 +17,7 @@ main = do
       case decode content of
         Just (Object o) -> do
           let unflattened = unflattenJSON o
-          B.putStr (encodePretty unflattened)
+          B.putStr (encode unflattened)
         Just _ -> putStrLn "Error: Unflattening requires a JSON object at the root"
         Nothing -> putStrLn "Error: Invalid JSON file"
     [filePath] -> do
