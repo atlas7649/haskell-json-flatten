@@ -1,6 +1,6 @@
 # Haskell JSON Flattener
 
-This project provides a Haskell library and CLI tool to flatten nested JSON objects into a flat map where keys are represented using dot-notation for objects and index-notation for arrays.
+This project provides a Haskell library and CLI tool to flatten nested JSON objects into a flat map where keys are represented using dot-notation for objects and index-notation for arrays, and conversely unflatten them.
 
 ## Usage
 
@@ -8,9 +8,13 @@ This project provides a Haskell library and CLI tool to flatten nested JSON obje
    ```bash
    cabal build
    ```
-2. Run the CLI tool:
+2. Run the CLI tool to flatten:
    ```bash
    cabal run flatten-json-cli -- input.json
+   ```
+3. Run the CLI tool to unflatten:
+   ```bash
+   cabal run flatten-json-cli -- --unflatten flat.json
    ```
 
 ### Example

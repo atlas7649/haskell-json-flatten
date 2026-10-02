@@ -1,11 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Flatten (flattenJSON) where
+module Flatten (flattenJSON, unflattenJSON) where
 
 import Data.Aeson
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
-import Data.Scientific (Scientific)
 import qualified Data.Vector as V
+import Data.List (foldl')
+import Data.Maybe (fromMaybe)
 
 flattenJSON :: Value -> HM.HashMap T.Text Value
 flattenJSON = go ""
@@ -23,3 +24,18 @@ flattenJSON = go ""
             in HM.toList $ go newKey v) (zip [0..] items)
       in HM.fromList flattenedItems
     go prefix val = HM.singleton prefix val
+
+unflattenJSON :: HM.HashMap T.Text Value -> Value
+unflattenJSON flattened = foldl' insertPath (Object HM.empty) (HM.toList flattened)
+  where
+    insertPath :: Value -> (T.Text, Value) -> Value
+    insertPath root (path, val) = go root (parsePath path)
+      where
+        go _ [] = val
+        go (Object o) (p:ps) = 
+          let existing = fromMaybe (Object HM.empty) (HM.lookup p o)
+          in Object (HM.insert p (go existing ps) o)
+        go _ (p:ps) = Object (HM.singleton p (go (Object HM.empty) ps))
+
+    parsePath :: T.Text -> [T.Text]
+    parsePath t = T.splitOn "." t
