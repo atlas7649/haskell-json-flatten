@@ -5,7 +5,7 @@ import Data.Aeson
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import qualified Data.Vector as V
-import Data.List (foldl')
+import Data.List (foldl', sortOn)
 import Data.Maybe (fromMaybe)
 import Text.Read (readMaybe)
 
@@ -27,7 +27,7 @@ flattenJSON = go ""
     go prefix val = HM.singleton prefix val
 
 unflattenJSON :: HM.HashMap T.Text Value -> Value
-unflattenJSON flattened = foldl' insertPath (Object HM.empty) (HM.toList flattened)
+unflattenJSON flattened = finalize (foldl' insertPath (Object HM.empty) (HM.toList flattened))
   where
     insertPath :: Value -> (T.Text, Value) -> Value
     insertPath root (path, val) = go root (parsePath path)
@@ -52,6 +52,18 @@ unflattenJSON flattened = foldl' insertPath (Object HM.empty) (HM.toList flatten
               in if T.null prefix then [fullIdx] <> splitParts sep remainder
                  else prefix : fullIdx : splitParts sep remainder
 
-    -- Note: True array reconstruction requires tracking indices and sorting, 
-    -- this implementation currently reconstructs as objects with index keys
-    -- to maintain stability within the existing HM.HashMap structure.
+    finalize :: Value -> Value
+    finalize (Object o) = 
+      let processed = HM.map finalize o
+          keys = HM.keys processed
+          -- Check if all keys are of the form "[i]"
+          isArrayIndex k = T.length k >= 3 && T.head k == '[' && T.last k == ']'
+          allIndices = all isArrayIndex keys
+          numericIndices = [ (readMaybe (T.unpack $ T.init $ T.tail k) :: Maybe Int, k) | k <- keys ]
+          validIndices = all (\(m, _) -> m /= Nothing) numericIndices
+      in if allIndices && validIndices
+         then let sorted = sortOn fst [ (idx, v) | (Just idx, k) <- numericIndices, let v = processed HM.! k ]
+              in Array (V.fromList $ map snd sorted)
+         else Object processed
+    finalize (Array a) = Array (V.map finalize a)
+    finalize v = v
