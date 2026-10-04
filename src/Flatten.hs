@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Flatten (flattenJSON, unflattenJSON) where
+module Flatten (flattenJSON, unflattenJSON, flattenJSONToList, unflattenJSONFromList) where
 
 import Data.Aeson
 import qualified Data.HashMap.Strict as HM
@@ -10,7 +10,10 @@ import Data.Maybe (fromMaybe)
 import Text.Read (readMaybe)
 
 flattenJSON :: T.Text -> Value -> HM.HashMap T.Text Value
-flattenJSON delim val = HM.fromList $ go "" val
+flattenJSON delim val = HM.fromList $ flattenJSONToList delim val
+
+flattenJSONToList :: T.Text -> Value -> [(T.Text, Value)]
+flattenJSONToList delim val = go "" val
   where
     go prefix (Object o) = 
       let items = HM.toList o
@@ -25,7 +28,10 @@ flattenJSON delim val = HM.fromList $ go "" val
     go prefix v = if T.null prefix then [("root", v)] else [(prefix, v)]
 
 unflattenJSON :: T.Text -> HM.HashMap T.Text Value -> Value
-unflattenJSON delim flattened = finalize (foldl' insertPath (Object HM.empty) (HM.toList flattened))
+unflattenJSON delim flattened = unflattenJSONFromList delim (HM.toList flattened)
+
+unflattenJSONFromList :: T.Text -> [(T.Text, Value)] -> Value
+unflattenJSONFromList delim flattened = finalize (foldl' insertPath (Object HM.empty) flattened)
   where
     insertPath :: Value -> (T.Text, Value) -> Value
     insertPath root (path, val) = go root (parsePath path)
