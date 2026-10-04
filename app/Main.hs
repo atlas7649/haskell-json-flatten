@@ -13,35 +13,41 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
-    ["--unflatten", filePath] -> handleUnflatten (Just filePath)
-    ["--unflatten"]           -> handleUnflatten Nothing
-    ["--json", filePath]      -> handleJson (Just filePath)
-    ["--json"]                -> handleJson Nothing
-    [filePath]                 -> handleDefault (Just filePath)
-    []                          -> handleDefault Nothing
-    _ -> putStrLn "Usage: flatten-json-cli [--unflatten | --json] [file.json]"
+    ("--delim" : d : "--unflatten" : filePath : _) -> handleUnflatten (T.pack d) (Just filePath)
+    ("--delim" : d : "--unflatten" : _)           -> handleUnflatten (T.pack d) Nothing
+    ("--delim" : d : "--json" : filePath : _)      -> handleJson (T.pack d) (Just filePath)
+    ("--delim" : d : "--json" : _)                -> handleJson (T.pack d) Nothing
+    ("--delim" : d : filePath : _)                 -> handleDefault (T.pack d) (Just filePath)
+    ("--delim" : d : _)                             -> handleDefault (T.pack d) Nothing
+    ["--unflatten", filePath] -> handleUnflatten "." (Just filePath)
+    ["--unflatten"]           -> handleUnflatten "." Nothing
+    ["--json", filePath]      -> handleJson "." (Just filePath)
+    ["--json"]                -> handleJson "." Nothing
+    [filePath]                 -> handleDefault "." (Just filePath)
+    []                          -> handleDefault "." Nothing
+    _ -> putStrLn "Usage: flatten-json-cli [--delim <char>] [--unflatten | --json] [file.json]"
 
-handleUnflatten :: Maybe FilePath -> IO ()
-handleUnflatten mPath = do
+handleUnflatten :: T.Text -> Maybe FilePath -> IO ()
+handleUnflatten delim mPath = do
   content <- readInput mPath
   case decode content of
-    Just (Object o) -> B.putStr (encode $ unflattenJSON "." o)
+    Just (Object o) -> B.putStr (encode $ unflattenJSON delim o)
     Just _ -> putStrLn "Error: Unflattening requires a JSON object at the root"
     Nothing -> putStrLn "Error: Invalid JSON file"
 
-handleJson :: Maybe FilePath -> IO ()
-handleJson mPath = do
+handleJson :: T.Text -> Maybe FilePath -> IO ()
+handleJson delim mPath = do
   content <- readInput mPath
   case decode content of
-    Just val -> B.putStr (encode $ flattenJSON "." val)
+    Just val -> B.putStr (encode $ flattenJSON delim val)
     Nothing -> putStrLn "Error: Invalid JSON file"
 
-handleDefault :: Maybe FilePath -> IO ()
-handleDefault mPath = do
+handleDefault :: T.Text -> Maybe FilePath -> IO ()
+handleDefault delim mPath = do
   content <- readInput mPath
   case decode content of
     Just val -> do
-      let flattened = flattenJSON "." val
+      let flattened = flattenJSON delim val
       let sortedItems = sortOn fst (HM.toList flattened)
       mapM_ (\(k, v) -> TIO.putStrLn $ k <> ": " <> T.pack (show v)) sortedItems
     Nothing -> putStrLn "Error: Invalid JSON file"
