@@ -9,13 +9,13 @@ import Data.List (foldl', sortOn)
 import Data.Maybe (fromMaybe)
 import Text.Read (readMaybe)
 
-flattenJSON :: Value -> HM.HashMap T.Text Value
-flattenJSON val = go "" val
+flattenJSON :: T.Text -> Value -> HM.HashMap T.Text Value
+flattenJSON delim val = go "" val
   where
     go prefix (Object o) = 
       let items = HM.toList o
           flattenedItems = concatMap (\(k, v) -> 
-            let newKey = if T.null prefix then k else prefix <> "." <> k
+            let newKey = if T.null prefix then k else prefix <> delim <> k
             in HM.toList $ go newKey v) items
       in HM.fromList flattenedItems
     go prefix (Array a) = 
@@ -26,8 +26,8 @@ flattenJSON val = go "" val
       in HM.fromList flattenedItems
     go prefix v = if T.null prefix then HM.empty else HM.singleton prefix v
 
-unflattenJSON :: HM.HashMap T.Text Value -> Value
-unflattenJSON flattened = finalize (foldl' insertPath (Object HM.empty) (HM.toList flattened))
+unflattenJSON :: T.Text -> HM.HashMap T.Text Value -> Value
+unflattenJSON delim flattened = finalize (foldl' insertPath (Object HM.empty) (HM.toList flattened))
   where
     insertPath :: Value -> (T.Text, Value) -> Value
     insertPath root (path, val) = go root (parsePath path)
@@ -44,13 +44,14 @@ unflattenJSON flattened = finalize (foldl' insertPath (Object HM.empty) (HM.toLi
         splitArray sep acc = concatMap (splitParts sep) acc
         splitParts sep part = 
           case T.breakOn sep part of
-            (prefix, suffix) | T.null suffix -> [prefix]
+            (prefix, suffix) | T.null suffix -> splitByDelim prefix
             (prefix, suffix) -> 
               let rest = T.drop (T.length sep) suffix
                   (idx, remainder) = T.breakOn "]" rest
                   fullIdx = idx <> "]"
               in if T.null prefix then [fullIdx] <> splitParts sep remainder
-                 else prefix : fullIdx : splitParts sep remainder
+                 else splitByDelim prefix ++ [fullIdx] ++ splitParts sep remainder
+        splitByDelim p = T.splitOn delim p
 
     finalize :: Value -> Value
     finalize (Object o) = 

@@ -16,7 +16,7 @@ main = do
       content <- B.readFile filePath
       case decode content of
         Just (Object o) -> do
-          let unflattened = unflattenJSON o
+          let unflattened = unflattenJSON "." o
           B.putStr (encode unflattened)
         Just _ -> putStrLn "Error: Unflattening requires a JSON object at the root"
         Nothing -> putStrLn "Error: Invalid JSON file"
@@ -24,14 +24,14 @@ main = do
       content <- B.readFile filePath
       case decode content of
         Just val -> do
-          let flattened = flattenJSON val
+          let flattened = flattenJSON "." val
           B.putStr (encode flattened)
         Nothing -> putStrLn "Error: Invalid JSON file"
     [filePath] -> do
       content <- B.readFile filePath
       case decode content of
         Just val -> do
-          let flattened = flattenJSON val
+          let flattened = flattenJSON "." val
           let sortedItems = sortOn fst (HM.toList flattened)
           mapM_ (\(k, v) -> TIO.putStrLn $ k <> ": " <> T.pack (show v)) sortedItems
         Nothing -> putStrLn "Error: Invalid JSON file"
