@@ -10,7 +10,7 @@ import Data.Maybe (fromMaybe)
 import Text.Read (readMaybe)
 
 flattenJSON :: Value -> HM.HashMap T.Text Value
-flattenJSON = go ""
+flattenJSON val = go "" val
   where
     go prefix (Object o) = 
       let items = HM.toList o
@@ -21,10 +21,10 @@ flattenJSON = go ""
     go prefix (Array a) = 
       let items = V.toList a
           flattenedItems = concatMap (\(i, v) -> 
-            let newKey = prefix <> "[" <> T.pack (show i) <> "]"
+            let newKey = if T.null prefix then "[" <> T.pack (show i) <> "]" else prefix <> "[" <> T.pack (show i) <> "]"
             in HM.toList $ go newKey v) (zip [0..] items)
       in HM.fromList flattenedItems
-    go prefix val = HM.singleton prefix val
+    go prefix v = if T.null prefix then HM.empty else HM.singleton prefix v
 
 unflattenJSON :: HM.HashMap T.Text Value -> Value
 unflattenJSON flattened = finalize (foldl' insertPath (Object HM.empty) (HM.toList flattened))
