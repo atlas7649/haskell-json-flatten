@@ -10,21 +10,19 @@ import Data.Maybe (fromMaybe)
 import Text.Read (readMaybe)
 
 flattenJSON :: T.Text -> Value -> HM.HashMap T.Text Value
-flattenJSON delim val = go "" val
+flattenJSON delim val = HM.fromList $ go "" val
   where
     go prefix (Object o) = 
       let items = HM.toList o
-          flattenedItems = concatMap (\(k, v) -> 
+      in concatMap (\(k, v) -> 
             let newKey = if T.null prefix then k else prefix <> delim <> k
-            in HM.toList $ go newKey v) items
-      in HM.fromList flattenedItems
+            in go newKey v) items
     go prefix (Array a) = 
       let items = V.toList a
-          flattenedItems = concatMap (\(i, v) -> 
+      in concatMap (\(i, v) -> 
             let newKey = if T.null prefix then "[" <> T.pack (show i) <> "]" else prefix <> "[" <> T.pack (show i) <> "]"
-            in HM.toList $ go newKey v) (zip [0..] items)
-      in HM.fromList flattenedItems
-    go prefix v = if T.null prefix then HM.empty else HM.singleton prefix v
+            in go newKey v) (zip [0..] items)
+    go prefix v = if T.null prefix then [("root", v)] else [(prefix, v)]
 
 unflattenJSON :: T.Text -> HM.HashMap T.Text Value -> Value
 unflattenJSON delim flattened = finalize (foldl' insertPath (Object HM.empty) (HM.toList flattened))
