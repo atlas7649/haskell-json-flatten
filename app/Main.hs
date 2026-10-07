@@ -14,8 +14,24 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
+    ("--help" : _) -> printUsage
     ("--pretty" : rest) -> handleArgs True rest
     rest                  -> handleArgs False rest
+
+printUsage :: IO ()
+printUsage = putStrLn "Usage: flatten-json-cli [OPTIONS] [file.json]
+
+Options:
+  --pretty            Print JSON output with indentation
+  --delim <char>      Use a custom delimiter (default: '.')
+  --unflatten          Unflatten a flat JSON map back to nested structure
+  --json               Output the flattened result as JSON instead of text
+  --help              Show this help message
+
+Example:
+  flatten-json-cli input.json
+  flatten-json-cli --pretty --delim "/" --json input.json
+  flatten-json-cli --unflatten flat.json"
 
 handleArgs :: Bool -> [String] -> IO ()
 handleArgs pretty args = case args of
@@ -31,7 +47,7 @@ handleArgs pretty args = case args of
     ["--json"]                -> handleJson pretty "." Nothing
     [filePath]                 -> handleDefault pretty "." (Just filePath)
     []                          -> handleDefault pretty "." Nothing
-    _ -> putStrLn "Usage: flatten-json-cli [--pretty] [--delim <char>] [--unflatten | --json] [file.json]"
+    _ -> printUsage
 
 handleUnflatten :: Bool -> T.Text -> Maybe FilePath -> IO ()
 handleUnflatten pretty delim mPath = do
