@@ -9,6 +9,7 @@ import Flatten (flattenJSON, unflattenJSON)
 import System.Environment (getArgs)
 import Data.List (sortOn)
 import System.IO (stdin)
+import System.Directory (doesFileExist)
 
 data Config = Config
   { cfgPretty    :: Bool
@@ -25,7 +26,7 @@ main :: IO ()
 main = do
   args <- getArgs
   case parseArgs defaultConfig args of
-    Left err -> putStrLn err >> printUsage
+    Left err -> if err == "HELP" then printUsage else putStrLn err >> printUsage
     Right cfg -> runCLI cfg
 
 printUsage :: IO ()
@@ -58,36 +59,30 @@ parseArgs cfg (path:rest)
       Just _  -> Left "Multiple input files provided"
 
 runCLI :: Config -> IO ()
-runCLI cfg
-  | cfgUnflatten cfg = handleUnflatten cfg
-  | cfgJson cfg     = handleJson cfg
-  | otherwise       = handleDefault cfg
+runCLI cfg = do
+  inputResult <- readInput (cfgFile cfg)
+  case inputResult of
+    Left err -> putStrLn $ "Error: " ++ err
+    Right content -> 
+      case decode content of
+        Nothing -> putStrLn "Error: Invalid JSON content"
+        Just val -> executeAction cfg val
 
-handleUnflatten :: Config -> IO ()
-handleUnflatten cfg = do
-  content <- readInput (cfgFile cfg)
-  case decode content of
-    Just (Object o) -> B.putStr (if cfgPretty cfg then encodePretty else encode $ unflattenJSON (cfgDelim cfg) o)
-    Just _ -> putStrLn "Error: Unflattening requires a JSON object at the root"
-    Nothing -> putStrLn "Error: Invalid JSON file"
-
-handleJson :: Config -> IO ()
-handleJson cfg = do
-  content <- readInput (cfgFile cfg)
-  case decode content of
-    Just val -> B.putStr (if cfgPretty cfg then encodePretty else encode $ flattenJSON (cfgDelim cfg) val)
-    Nothing -> putStrLn "Error: Invalid JSON file"
-
-handleDefault :: Config -> IO ()
-handleDefault cfg = do
-  content <- readInput (cfgFile cfg)
-  case decode content of
-    Just val -> do
+executeAction :: Config -> Value -> IO ()
+executeAction cfg val
+  | cfgUnflatten cfg = case val of
+      Object o -> B.putStr (if cfgPretty cfg then encodePretty else encode $ unflattenJSON (cfgDelim cfg) o)
+      _        -> putStrLn "Error: Unflattening requires a JSON object at the root"
+  | cfgJson cfg = B.putStr (if cfgPretty cfg then encodePretty else encode $ flattenJSON (cfgDelim cfg) val)
+  | otherwise = do
       let flattened = flattenJSON (cfgDelim cfg) val
       let sortedItems = sortOn fst (HM.toList flattened)
       mapM_ (\(k, v) -> TIO.putStrLn $ k <> ": " <> T.pack (show v)) sortedItems
-    Nothing -> putStrLn "Error: Invalid JSON file"
 
-readInput :: Maybe FilePath -> IO B.ByteString
-readInput (Just path) = B.readFile path
-readInput Nothing     = B.hGetContents stdin
+readInput :: Maybe FilePath -> IO (Either String B.ByteString)
+readInput (Just path) = do
+  exists <- doesFileExist path
+  if exists
+    then Right <$> B.readFile path
+    else return $ Left $ "File not found: " ++ path
+readInput Nothing = Right <$> B.hGetContents stdin
