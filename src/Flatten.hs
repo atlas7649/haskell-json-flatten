@@ -23,9 +23,9 @@ flattenJSONToList delim val = go "" val
     go prefix (Array a) = 
       let items = V.toList a
       in concatMap (\(i, v) -> 
-            let newKey = if T.null prefix then "[" <> T.pack (show i) <> "]" else prefix <> "[" <> T.pack (show i) <> "]"
+            let newKey = prefix <> "[" <> T.pack (show i) <> "]"
             in go newKey v) (zip [0..] items)
-    go prefix v = if T.null prefix then [("root", v)] else [(prefix, v)]
+    go prefix v = if T.null prefix then [("", v)] else [(prefix, v)]
 
 unflattenJSON :: T.Text -> HM.HashMap T.Text Value -> Value
 unflattenJSON delim flattened = unflattenJSONFromList delim (HM.toList flattened)
