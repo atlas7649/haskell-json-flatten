@@ -10,13 +10,23 @@ import System.Environment (getArgs)
 import Data.List (sortOn)
 import System.IO (stdin)
 
+data Config = Config
+  { cfgPretty    :: Bool
+  , cfgDelim     :: T.Text
+  , cfgUnflatten :: Bool
+  , cfgJson     :: Bool
+  , cfgFile      :: Maybe FilePath
+  }
+
+defaultConfig :: Config
+defaultConfig = Config False "." False False Nothing
+
 main :: IO ()
 main = do
   args <- getArgs
-  case args of
-    ("--help" : _) -> printUsage
-    ("--pretty" : rest) -> handleArgs True rest
-    rest                  -> handleArgs False rest
+  case parseArgs defaultConfig args of
+    Left err -> putStrLn err >> printUsage
+    Right cfg -> runCLI cfg
 
 printUsage :: IO ()
 printUsage = putStrLn "Usage: flatten-json-cli [OPTIONS] [file.json]
@@ -33,43 +43,47 @@ Example:
   flatten-json-cli --pretty --delim "/" --json input.json
   flatten-json-cli --unflatten flat.json"
 
-handleArgs :: Bool -> [String] -> IO ()
-handleArgs pretty args = case args of
-    ("--delim" : d : "--unflatten" : filePath : _) -> handleUnflatten pretty (T.pack d) (Just filePath)
-    ("--delim" : d : "--unflatten" : _)           -> handleUnflatten pretty (T.pack d) Nothing
-    ("--delim" : d : "--json" : filePath : _)      -> handleJson pretty (T.pack d) (Just filePath)
-    ("--delim" : d : "--json" : _)                -> handleJson pretty (T.pack d) Nothing
-    ("--delim" : d : filePath : _)                 -> handleDefault pretty (T.pack d) (Just filePath)
-    ("--delim" : d : _)                             -> handleDefault pretty (T.pack d) Nothing
-    ["--unflatten", filePath] -> handleUnflatten pretty "." (Just filePath)
-    ["--unflatten"]           -> handleUnflatten pretty "." Nothing
-    ["--json", filePath]      -> handleJson pretty "." (Just filePath)
-    ["--json"]                -> handleJson pretty "." Nothing
-    [filePath]                 -> handleDefault pretty "." (Just filePath)
-    []                          -> handleDefault pretty "." Nothing
-    _ -> printUsage
+parseArgs :: Config -> [String] -> Either String Config
+parseArgs cfg [] = Right cfg
+parseArgs cfg ("--help":_) = Left "HELP"
+parseArgs cfg ("--pretty":rest) = parseArgs cfg { cfgPretty = True } rest
+parseArgs cfg ("--unflatten":rest) = parseArgs cfg { cfgUnflatten = True } rest
+parseArgs cfg ("--json":rest) = parseArgs cfg { cfgJson = True } rest
+parseArgs cfg ("--delim":d:rest) = parseArgs cfg { cfgDelim = T.pack d } rest
+parseArgs cfg ("--delim":[]) = Left "--delim requires an argument"
+parseArgs cfg (path:rest) 
+  | "--" `T.isPrefixOf` T.pack path = Left $ "Unknown option: " ++ path
+  | otherwise = case cfgFile cfg of
+      Nothing -> parseArgs cfg { cfgFile = Just path } rest
+      Just _  -> Left "Multiple input files provided"
 
-handleUnflatten :: Bool -> T.Text -> Maybe FilePath -> IO ()
-handleUnflatten pretty delim mPath = do
-  content <- readInput mPath
+runCLI :: Config -> IO ()
+runCLI cfg
+  | cfgUnflatten cfg = handleUnflatten cfg
+  | cfgJson cfg     = handleJson cfg
+  | otherwise       = handleDefault cfg
+
+handleUnflatten :: Config -> IO ()
+handleUnflatten cfg = do
+  content <- readInput (cfgFile cfg)
   case decode content of
-    Just (Object o) -> B.putStr (if pretty then encodePretty else encode $ unflattenJSON delim o)
+    Just (Object o) -> B.putStr (if cfgPretty cfg then encodePretty else encode $ unflattenJSON (cfgDelim cfg) o)
     Just _ -> putStrLn "Error: Unflattening requires a JSON object at the root"
     Nothing -> putStrLn "Error: Invalid JSON file"
 
-handleJson :: Bool -> T.Text -> Maybe FilePath -> IO ()
-handleJson pretty delim mPath = do
-  content <- readInput mPath
+handleJson :: Config -> IO ()
+handleJson cfg = do
+  content <- readInput (cfgFile cfg)
   case decode content of
-    Just val -> B.putStr (if pretty then encodePretty else encode $ flattenJSON delim val)
+    Just val -> B.putStr (if cfgPretty cfg then encodePretty else encode $ flattenJSON (cfgDelim cfg) val)
     Nothing -> putStrLn "Error: Invalid JSON file"
 
-handleDefault :: Bool -> T.Text -> Maybe FilePath -> IO ()
-handleDefault _ delim mPath = do
-  content <- readInput mPath
+handleDefault :: Config -> IO ()
+handleDefault cfg = do
+  content <- readInput (cfgFile cfg)
   case decode content of
     Just val -> do
-      let flattened = flattenJSON delim val
+      let flattened = flattenJSON (cfgDelim cfg) val
       let sortedItems = sortOn fst (HM.toList flattened)
       mapM_ (\(k, v) -> TIO.putStrLn $ k <> ": " <> T.pack (show v)) sortedItems
     Nothing -> putStrLn "Error: Invalid JSON file"
