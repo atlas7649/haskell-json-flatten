@@ -43,19 +43,20 @@ unflattenJSONFromList delim flattened = finalize (foldl' insertPath (Object HM.e
         go _ (p:ps) = Object (HM.singleton p (go (Object HM.empty) ps))
 
     parsePath :: T.Text -> [T.Text]
-    parsePath t = filter (not . T.null) $ foldr splitArray [t] [T.pack "["]
+    parsePath t = go t
       where
-        splitArray sep acc = concatMap (splitParts sep) acc
-        splitParts sep part = 
-          case T.breakOn sep part of
-            (prefix, suffix) | T.null suffix -> splitByDelim prefix
-            (prefix, suffix) -> 
-              let rest = T.drop (T.length sep) suffix
-                  (idx, remainder) = T.breakOn "]" rest
-                  fullIdx = idx <> "]"
-              in if T.null prefix then [fullIdx] <> splitParts sep remainder
-                 else splitByDelim prefix ++ [fullIdx] ++ splitParts sep remainder
-        splitByDelim p = T.splitOn delim p
+        go txt
+          | T.null txt = []
+          | "[" `T.isPrefixOf` txt = 
+              let (idx, rest) = T.breakOn "]" txt
+              in if T.null rest 
+                 then [idx <> "]"] 
+                 else (idx <> "]") : go (T.drop 1 rest)
+          | otherwise = 
+              let (prefix, suffix) = T.breakOn delim txt
+              in if T.null suffix
+                 then [prefix]
+                 else prefix : go (T.drop (T.length delim) suffix)
 
     finalize :: Value -> Value
     finalize (Object o) = 
