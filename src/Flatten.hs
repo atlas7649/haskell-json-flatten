@@ -46,20 +46,21 @@ unflattenJSONFromList delim flattened = finalize (foldl' insertPath (Object HM.e
     parsePath t 
       | T.null t = []
       | otherwise = 
-          let (prefix, suffix) = T.breakOn "[" t
-          in if T.null prefix
-             then let (idx, rest) = T.breakOn "]" (T.drop 1 t)
-                  in ("[" <> idx <> "]") : parsePath (T.drop 1 rest)
-             else let (key, rest) = T.breakOn delim prefix
-                  in if T.null rest
-                     then key : parsePath (T.drop 1 suffix)
-                     else key : parsePath (T.drop (T.length delim) rest)
+          -- Handle array indices first
+          if "[" `T.isPrefixOf` t
+          then let (idx, rest) = T.breakOn "]" (T.drop 1 t)
+               in ("[" <> idx <> "]") : parsePath (T.drop 1 rest)
+          -- Handle object keys using delimiter
+          else let (key, rest) = T.breakOn delim t
+               in if T.null rest
+                  then let (prefix, suffix) = T.breakOn "[" key
+                       in if T.null suffix then [key] else parsePath key
+                  else key : parsePath (T.drop (T.length delim) rest)
 
     finalize :: Value -> Value
     finalize (Object o) = 
       let processed = HM.map finalize o
           keys = HM.keys processed
-          -- Check if all keys are of the form "[i]"
           isArrayIndex k = T.length k >= 3 && T.head k == '[' && T.last k == ']'
           allIndices = not (null keys) && all isArrayIndex keys
           numericIndices = [ (readMaybe (T.unpack $ T.init $ T.tail k) :: Maybe Int, k) | k <- keys ]
