@@ -43,20 +43,17 @@ unflattenJSONFromList delim flattened = finalize (foldl' insertPath (Object HM.e
         go _ (p:ps) = Object (HM.singleton p (go (Object HM.empty) ps))
 
     parsePath :: T.Text -> [T.Text]
-    parsePath t = go t
-      where
-        go txt
-          | T.null txt = []
-          | "[" `T.isPrefixOf` txt = 
-              let (idx, rest) = T.breakOn "]" txt
-              in if T.null rest 
-                 then [idx <> "]"] 
-                 else (idx <> "]") : go (T.drop 1 rest)
-          | otherwise = 
-              let (prefix, suffix) = T.breakOn delim txt
-              in if T.null suffix
-                 then [prefix]
-                 else prefix : go (T.drop (T.length delim) suffix)
+    parsePath t 
+      | T.null t = []
+      | otherwise = 
+          let (prefix, suffix) = T.breakOn "[" t
+          in if T.null prefix
+             then let (idx, rest) = T.breakOn "]" (T.drop 1 t)
+                  in ("[" <> idx <> "]") : parsePath (T.drop 1 rest)
+             else let (key, rest) = T.breakOn delim prefix
+                  in if T.null rest
+                     then key : parsePath (T.drop 1 suffix)
+                     else key : parsePath (T.drop (T.length delim) rest)
 
     finalize :: Value -> Value
     finalize (Object o) = 
@@ -64,7 +61,7 @@ unflattenJSONFromList delim flattened = finalize (foldl' insertPath (Object HM.e
           keys = HM.keys processed
           -- Check if all keys are of the form "[i]"
           isArrayIndex k = T.length k >= 3 && T.head k == '[' && T.last k == ']'
-          allIndices = all isArrayIndex keys
+          allIndices = not (null keys) && all isArrayIndex keys
           numericIndices = [ (readMaybe (T.unpack $ T.init $ T.tail k) :: Maybe Int, k) | k <- keys ]
           validIndices = all (\(m, _) -> m /= Nothing) numericIndices
       in if allIndices && validIndices
