@@ -34,7 +34,9 @@ unflattenJSONFromList :: T.Text -> [(T.Text, Value)] -> Value
 unflattenJSONFromList delim flattened = finalize (foldl' insertPath (Object HM.empty) flattened)
   where
     insertPath :: Value -> (T.Text, Value) -> Value
-    insertPath root (path, val) = go root (parsePath path)
+    insertPath root (path, val)
+      | T.null path = val
+      | otherwise = go root (parsePath path)
       where
         go _ [] = val
         go (Object o) (p:ps) = 
@@ -46,16 +48,17 @@ unflattenJSONFromList delim flattened = finalize (foldl' insertPath (Object HM.e
     parsePath t 
       | T.null t = []
       | otherwise = 
-          -- Handle array indices first
           if "[" `T.isPrefixOf` t
           then let (idx, rest) = T.breakOn "]" (T.drop 1 t)
                in ("[" <> idx <> "]") : parsePath (T.drop 1 rest)
-          -- Handle object keys using delimiter
           else let (key, rest) = T.breakOn delim t
-               in if T.null rest
-                  then let (prefix, suffix) = T.breakOn "[" key
-                       in if T.null suffix then [key] else parsePath key
-                  else key : parsePath (T.drop (T.length delim) rest)
+                   (keyNoIdx, idxPart) = T.breakOn "[" key
+               in if not (T.null idxPart)
+                  then let (idx, remainingKey) = T.breakOn "]" (T.drop 1 idxPart)
+                       in keyNoIdx : ("[" <> idx <> "]") : parsePath (T.drop 1 remainingKey)
+                  else if T.null rest
+                       then [key]
+                       else key : parsePath (T.drop (T.length delim) rest)
 
     finalize :: Value -> Value
     finalize (Object o) = 
