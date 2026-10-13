@@ -5,7 +5,7 @@ import Data.Aeson.Encode.Pretty (encodePretty)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text.IO as TIO
 import qualified Data.Text as T
-import Flatten (flattenJSON, unflattenJSON)
+import Flatten (flattenJSON, unflattenJSON, validateFlattened)
 import System.Environment (getArgs)
 import Data.List (sortOn)
 import System.IO (stdin)
@@ -71,7 +71,10 @@ runCLI cfg = do
 executeAction :: Config -> Value -> IO ()
 executeAction cfg val
   | cfgUnflatten cfg = case val of
-      Object o -> B.putStr (if cfgPretty cfg then encodePretty else encode $ unflattenJSON (cfgDelim cfg) o)
+      Object o -> 
+        case validateFlattened (cfgDelim cfg) o of
+          Left err -> TIO.putStrLn $ "Error: " <> err
+          Right _ -> B.putStr (if cfgPretty cfg then encodePretty else encode $ unflattenJSON (cfgDelim cfg) o)
       _        -> putStrLn "Error: Unflattening requires a JSON object at the root"
   | cfgJson cfg = B.putStr (if cfgPretty cfg then encodePretty else encode $ flattenJSON (cfgDelim cfg) val)
   | otherwise = do

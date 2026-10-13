@@ -1,11 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Flatten (flattenJSON, unflattenJSON, flattenJSONToList, unflattenJSONFromList) where
+module Flatten (flattenJSON, unflattenJSON, flattenJSONToList, unflattenJSONFromList, validateFlattened) where
 
 import Data.Aeson
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import qualified Data.Vector as V
-import Data.List (foldl', sortOn)
+import Data.List (foldl', sortOn, isPrefixOf)
 import Data.Maybe (fromMaybe)
 import Text.Read (readMaybe)
 
@@ -74,3 +74,15 @@ unflattenJSONFromList delim flattened = finalize (foldl' insertPath (Object HM.e
          else Object processed
     finalize (Array a) = Array (V.map finalize a)
     finalize v = v
+
+validateFlattened :: T.Text -> HM.HashMap T.Text Value -> Either T.Text ()
+validateFlattened delim flattened = 
+  let keys = HM.keys flattened
+      collisions = [ (k1, k2) | k1 <- keys, k2 <- keys, k1 /= k2, isParentOf k1 k2 ]
+  in if null collisions
+     then Right ()
+     else Left $ "Collision detected between paths: " <> T.pack (show $ head collisions)
+  where
+    isParentOf p1 p2 = 
+      let p1' = p1 <> delim
+      in p1' `T.isPrefixOf` p2
