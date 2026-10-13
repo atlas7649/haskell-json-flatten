@@ -45,20 +45,24 @@ unflattenJSONFromList delim flattened = finalize (foldl' insertPath (Object HM.e
         go _ (p:ps) = Object (HM.singleton p (go (Object HM.empty) ps))
 
     parsePath :: T.Text -> [T.Text]
-    parsePath t 
+    parsePath t
       | T.null t = []
       | otherwise = 
-          if "[" `T.isPrefixOf` t
-          then let (idx, rest) = T.breakOn "]" (T.drop 1 t)
-               in ("[" <> idx <> "]") : parsePath (T.drop 1 rest)
-          else let (key, rest) = T.breakOn delim t
-                   (keyNoIdx, idxPart) = T.breakOn "[" key
-               in if not (T.null idxPart)
-                  then let (idx, remainingKey) = T.breakOn "]" (T.drop 1 idxPart)
-                       in keyNoIdx : ("[" <> idx <> "]") : parsePath (T.drop 1 remainingKey)
-                  else if T.null rest
-                       then [key]
-                       else key : parsePath (T.drop (T.length delim) rest)
+          case T.uncons t of
+            Nothing -> []
+            Just ('[', rest) -> 
+              let (idx, remaining) = T.breakOn "]" rest
+                  pathPart = "[" <> idx <> "]"
+              in pathPart : parsePath (T.drop 1 remaining)
+            Just _ -> 
+              let (key, rest) = T.breakOn delim t
+                  (pureKey, arrayPart) = T.breakOn "[" key
+              in if not (T.null arrayPart)
+                 then let (idx, remainingKey) = T.breakOn "]" (T.drop 1 arrayPart)
+                      in pureKey : ("[" <> idx <> "]") : parsePath (T.drop 1 remainingKey)
+                 else if T.null rest
+                      then [key]
+                      else key : parsePath (T.drop (T.length delim) rest)
 
     finalize :: Value -> Value
     finalize (Object o) = 
