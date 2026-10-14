@@ -88,5 +88,6 @@ validateFlattened delim flattened =
      else Left $ "Collision detected between paths: " <> T.pack (show $ head collisions)
   where
     isParentOf p1 p2 = 
-      let p1' = p1 <> delim
-      in p1' `T.isPrefixOf` p2
+      let p1WithDelim = p1 <> delim
+          p1WithBracket = p1 <> "["
+      in p1WithDelim `T.isPrefixOf` p2 || p1WithBracket `T.isPrefixOf` p2
