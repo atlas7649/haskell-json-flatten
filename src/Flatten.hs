@@ -5,7 +5,7 @@ import Data.Aeson
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import qualified Data.Vector as V
-import Data.List (foldl', sortOn, isPrefixOf)
+import Data.List (foldl', sortOn)
 import Data.Maybe (fromMaybe)
 import Text.Read (readMaybe)
 
@@ -48,21 +48,20 @@ unflattenJSONFromList delim flattened = finalize (foldl' insertPath (Object HM.e
     parsePath t
       | T.null t = []
       | otherwise = 
-          case T.uncons t of
-            Nothing -> []
-            Just ('[', rest) -> 
-              let (idx, remaining) = T.breakOn "]" rest
-                  pathPart = "[" <> idx <> "]"
-              in pathPart : parsePath (T.drop 1 remaining)
-            Just _ -> 
-              let (key, rest) = T.breakOn delim t
-                  (pureKey, arrayPart) = T.breakOn "[" key
-              in if not (T.null arrayPart)
-                 then let (idx, remainingKey) = T.breakOn "]" (T.drop 1 arrayPart)
-                      in pureKey : ("[" <> idx <> "]") : parsePath (T.drop 1 remainingKey)
-                 else if T.null rest
-                      then [key]
-                      else key : parsePath (T.drop (T.length delim) rest)
+          let (segment, rest) = T.breakOn delim t
+              (key, arrays) = T.breakOn "[" segment
+              arrayParts = if T.null arrays then [] else parseArrays arrays
+              currentParts = if T.null key then arrayParts else key : arrayParts
+              nextParts = if T.null rest then [] else parsePath (T.drop (T.length delim) rest)
+          in currentParts ++ nextParts
+
+    parseArrays :: T.Text -> [T.Text]
+    parseArrays t
+      | T.null t = []
+      | otherwise = 
+          let (idx, rest) = T.breakOn "]" (T.drop 1 t)
+              part = "[" <> idx <> "]"
+          in if T.null rest then [part] else part : parseArrays (T.drop 1 rest)
 
     finalize :: Value -> Value
     finalize (Object o) = 
