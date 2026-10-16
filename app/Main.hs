@@ -33,6 +33,7 @@ printUsage :: IO ()
 printUsage = putStrLn "Usage: flatten-json-cli [OPTIONS] [file.json]
 
 Options:
+  --input <file>       Input JSON file (default: stdin if no file provided)
   --pretty            Print JSON output with indentation
   --delim <char>      Use a custom delimiter (default: '.')
   --unflatten          Unflatten a flat JSON map back to nested structure
@@ -50,6 +51,8 @@ parseArgs cfg ("--help":_) = Left "HELP"
 parseArgs cfg ("--pretty":rest) = parseArgs cfg { cfgPretty = True } rest
 parseArgs cfg ("--unflatten":rest) = parseArgs cfg { cfgUnflatten = True } rest
 parseArgs cfg ("--json":rest) = parseArgs cfg { cfgJson = True } rest
+parseArgs cfg ("--input":f:rest) = parseArgs cfg { cfgFile = Just f } rest
+parseArgs cfg ("--input":[]) = Left "--input requires an argument"
 parseArgs cfg ("--delim":d:rest) = parseArgs cfg { cfgDelim = T.pack d } rest
 parseArgs cfg ("--delim":[]) = Left "--delim requires an argument"
 parseArgs cfg (path:rest) 
@@ -64,9 +67,11 @@ runCLI cfg = do
   case inputResult of
     Left err -> putStrLn $ "Error: " ++ err
     Right content -> 
-      case decode content of
-        Nothing -> putStrLn "Error: Invalid JSON content"
-        Just val -> executeAction cfg val
+      if B.null content 
+        then putStrLn "Error: Input is empty"
+        else case decode content of
+          Nothing -> putStrLn "Error: Invalid JSON content"
+          Just val -> executeAction cfg val
 
 executeAction :: Config -> Value -> IO ()
 executeAction cfg val
