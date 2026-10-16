@@ -15,7 +15,7 @@ data Config = Config
   { cfgPretty    :: Bool
   , cfgDelim     :: T.Text
   , cfgUnflatten :: Bool
-  , cfgJson     :: Bool
+  , cfgJson      :: Bool
   , cfgFile      :: Maybe FilePath
   }
 
