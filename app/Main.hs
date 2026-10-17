@@ -13,6 +13,7 @@ import System.Directory (doesFileExist)
 
 data Config = Config
   { cfgPretty    :: Bool
+  , cfgCompress  :: Bool
   , cfgDelim     :: T.Text
   , cfgUnflatten :: Bool
   , cfgJson      :: Bool
@@ -20,7 +21,7 @@ data Config = Config
   }
 
 defaultConfig :: Config
-defaultConfig = Config False "." False False Nothing
+defaultConfig = Config False False "." False False Nothing
 
 main :: IO ()
 main = do
@@ -35,6 +36,7 @@ printUsage = putStrLn "Usage: flatten-json-cli [OPTIONS] [file.json]
 Options:
   --input <file>       Input JSON file (default: stdin if no file provided)
   --pretty            Print JSON output with indentation
+  --compress          Print JSON output in a compact single-line format
   --delim <char>      Use a custom delimiter (default: '.')
   --unflatten          Unflatten a flat JSON map back to nested structure
   --json               Output the flattened result as JSON instead of text
@@ -49,6 +51,7 @@ parseArgs :: Config -> [String] -> Either String Config
 parseArgs cfg [] = Right cfg
 parseArgs cfg ("--help":_) = Left "HELP"
 parseArgs cfg ("--pretty":rest) = parseArgs cfg { cfgPretty = True } rest
+parseArgs cfg ("--compress":rest) = parseArgs cfg { cfgCompress = True } rest
 parseArgs cfg ("--unflatten":rest) = parseArgs cfg { cfgUnflatten = True } rest
 parseArgs cfg ("--json":rest) = parseArgs cfg { cfgJson = True } rest
 parseArgs cfg ("--input":f:rest) = parseArgs cfg { cfgFile = Just f } rest
@@ -79,13 +82,18 @@ executeAction cfg val
       Object o -> 
         case validateFlattened (cfgDelim cfg) o of
           Left err -> TIO.putStrLn $ "Error: " <> err
-          Right _ -> B.putStr (if cfgPretty cfg then encodePretty else encode $ unflattenJSON (cfgDelim cfg) o)
+          Right _ -> B.putStr (renderJSON cfg $ unflattenJSON (cfgDelim cfg) o)
       _        -> putStrLn "Error: Unflattening requires a JSON object at the root"
-  | cfgJson cfg = B.putStr (if cfgPretty cfg then encodePretty else encode $ flattenJSON (cfgDelim cfg) val)
+  | cfgJson cfg = B.putStr (renderJSON cfg $ flattenJSON (cfgDelim cfg) val)
   | otherwise = do
       let flattened = flattenJSON (cfgDelim cfg) val
       let sortedItems = sortOn fst (HM.toList flattened)
       mapM_ (\(k, v) -> TIO.putStrLn $ k <> ": " <> T.pack (show v)) sortedItems
+
+renderJSON :: Config -> Value -> B.ByteString
+renderJSON cfg v
+  | cfgPretty cfg = encodePretty v
+  | otherwise     = encode v
 
 readInput :: Maybe FilePath -> IO (Either String B.ByteString)
 readInput (Just path) = do
